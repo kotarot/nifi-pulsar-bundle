@@ -133,9 +133,9 @@ public class ConsumePulsar extends AbstractPulsarConsumerProcessor<byte[]> {
             final byte[] demarcatorBytes = context.getProperty(MESSAGE_DEMARCATOR).isSet() ? context.getProperty(MESSAGE_DEMARCATOR)
                     .evaluateAttributeExpressions().getValue().getBytes(StandardCharsets.UTF_8) : null;
             
-            // Cumulative acks are only permitted on Exclusive subscriptions.
-            final boolean exclusive = context.getProperty(SUBSCRIPTION_TYPE).getValue()
-            		.equalsIgnoreCase(EXCLUSIVE.getValue());
+            // Cumulative acks are NOT permitted on Shared subscriptions.
+            final boolean shared = context.getProperty(SUBSCRIPTION_TYPE).getValue()
+                    .equalsIgnoreCase(SHARED.getValue());
 
             FlowFile flowFile = session.create();
             OutputStream out = session.write(flowFile);
@@ -149,7 +149,7 @@ public class ConsumePulsar extends AbstractPulsarConsumerProcessor<byte[]> {
                     lastMsg = msg;
                     loopCounter.incrementAndGet();
                     
-                    if (!exclusive) {
+                    if (shared) {
                     	consumer.acknowledge(msg);
                     }
 
@@ -164,7 +164,7 @@ public class ConsumePulsar extends AbstractPulsarConsumerProcessor<byte[]> {
                 } catch (final IOException ioEx) {
                   getLogger().error("Unable to create flow file ", ioEx);
                   session.rollback();
-                  if (exclusive) {
+                  if (!shared) {
                      consumer.acknowledgeCumulative(lastMsg);
                   }
                   return;
@@ -173,7 +173,7 @@ public class ConsumePulsar extends AbstractPulsarConsumerProcessor<byte[]> {
             
             IOUtils.closeQuietly(out);
 
-            if (exclusive && lastMsg != null)  {
+            if (!shared && lastMsg != null)  {
                 consumer.acknowledgeCumulative(lastMsg);
             }
 
