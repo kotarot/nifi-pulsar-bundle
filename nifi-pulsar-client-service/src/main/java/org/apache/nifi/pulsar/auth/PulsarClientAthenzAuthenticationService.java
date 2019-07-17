@@ -72,6 +72,7 @@ public class PulsarClientAthenzAuthenticationService extends AbstractPulsarClien
             .name("Tenants Private Key Id")
             .description("The id of tenant's private key.")
             .defaultValue("0")
+            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
             .required(false)
             .sensitive(false)
             .build();
