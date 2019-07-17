@@ -22,6 +22,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.nifi.annotation.documentation.CapabilityDescription;
+import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.pulsar.client.api.Authentication;
@@ -34,6 +36,10 @@ import org.apache.pulsar.client.impl.auth.AuthenticationAthenz;
  * https://pulsar.apache.org/docs/en/security-athenz/
  *
  */
+@Tags({"Pulsar", "client", "security", "authentication", "Athenz"})
+@CapabilityDescription("Implementation with Athenz Authentication of the PulsarClientAuthenticationService. "
+        + "Provides Pulsar clients with the ability to authenticate against a "
+        + "secured Apache Pulsar broker endpoint.")
 public class PulsarClientAthenzAuthenticationService extends AbstractPulsarClientAuntenticationService {
 	
     public static final PropertyDescriptor TENANT_DOMAIN = new PropertyDescriptor.Builder()

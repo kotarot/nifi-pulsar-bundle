@@ -22,12 +22,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.nifi.annotation.documentation.CapabilityDescription;
+import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.pulsar.client.api.Authentication;
 import org.apache.pulsar.client.api.AuthenticationFactory;
 import org.apache.pulsar.client.api.PulsarClientException.UnsupportedAuthenticationException;
 import org.apache.pulsar.client.impl.auth.AuthenticationTls;
 
+@Tags({"Pulsar", "client", "security", "authentication", "TLS"})
+@CapabilityDescription("Implementation with TLS Authentication of the PulsarClientAuthenticationService. "
+        + "Provides Pulsar clients with the ability to authenticate against a "
+        + "secured Apache Pulsar broker endpoint.")
 public class PulsarClientTlsAuthenticationService extends AbstractPulsarClientAuntenticationService {
 
     public static final PropertyDescriptor CLIENT_CERTIFICATE = new PropertyDescriptor.Builder()
