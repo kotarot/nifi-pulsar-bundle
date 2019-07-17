@@ -27,11 +27,6 @@
 
     <dependencies>
         <dependency>
-           <groupId>org.apache.pulsar</groupId>
-           <artifactId>pulsar-client-auth-athenz</artifactId>
-           <version>${pulsar.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-pulsar-client-service-api</artifactId>
             <version>1.9.0</version>
