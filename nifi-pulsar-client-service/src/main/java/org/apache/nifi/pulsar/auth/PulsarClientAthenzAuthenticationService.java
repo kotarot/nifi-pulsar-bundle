@@ -41,6 +41,7 @@ public class PulsarClientAthenzAuthenticationService extends AbstractPulsarClien
             .description("The domain name for this tenant")
             .defaultValue(null)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .required(true)
             .sensitive(false)
             .build();
     
@@ -49,6 +50,7 @@ public class PulsarClientAthenzAuthenticationService extends AbstractPulsarClien
             .description("The service name for this tenant")
             .defaultValue(null)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .required(true)
             .sensitive(false)
             .build();
 	
@@ -57,6 +59,7 @@ public class PulsarClientAthenzAuthenticationService extends AbstractPulsarClien
             .description("The provider domain name")
             .defaultValue(null)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .required(true)
             .sensitive(false)
             .build();
     
@@ -65,6 +68,7 @@ public class PulsarClientAthenzAuthenticationService extends AbstractPulsarClien
             .description("The fully-qualified filename of the tenant's private key.")
             .defaultValue(null)
             .addValidator(createFileExistsAndReadableValidator())
+            .required(true)
             .sensitive(false)
             .build();
     
