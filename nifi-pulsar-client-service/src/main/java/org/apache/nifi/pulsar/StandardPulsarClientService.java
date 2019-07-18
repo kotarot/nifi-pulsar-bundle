@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.nifi.annotation.documentation.CapabilityDescription;
+import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.lifecycle.OnDisabled;
 import org.apache.nifi.annotation.lifecycle.OnEnabled;
 import org.apache.nifi.annotation.lifecycle.OnShutdown;
@@ -38,6 +40,10 @@ import org.apache.pulsar.client.api.PulsarClient;
 import org.apache.pulsar.client.api.PulsarClientException;
 import org.apache.pulsar.client.api.PulsarClientException.UnsupportedAuthenticationException;
 
+@Tags({"Pulsar", "client", "pool"})
+@CapabilityDescription("Standard implementation of the PulsarClientService. "
+        + "Provides the ability to create Pulsar Producer / Consumer instances on demand, "
+        + "based on the configuration properties defined.")
 public class StandardPulsarClientService extends AbstractControllerService implements PulsarClientService {
 
     public static final PropertyDescriptor PULSAR_SERVICE_URL = new PropertyDescriptor.Builder()

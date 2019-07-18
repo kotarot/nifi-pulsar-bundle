@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.nifi.annotation.documentation.CapabilityDescription;
+import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.pulsar.client.api.Authentication;
@@ -29,6 +31,10 @@ import org.apache.pulsar.client.api.AuthenticationFactory;
  * http://pulsar.apache.org/docs/en/security-token-client/
  *
  */
+@Tags({"Pulsar", "client", "security", "authentication", "JWT"})
+@CapabilityDescription("Implementation with JSON Web Token (JWT) Authentication of the PulsarClientAuthenticationService. "
+        + "Provides Pulsar clients with the ability to authenticate against a "
+        + "secured Apache Pulsar broker endpoint.")
 public class PulsarClientJwtAuthenticationService extends AbstractPulsarClientAuntenticationService {
 
     public static final PropertyDescriptor JWT_TOKEN = new PropertyDescriptor.Builder()
