@@ -26,6 +26,7 @@ import org.apache.nifi.annotation.documentation.CapabilityDescription;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.PropertyValue;
+import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.pulsar.client.api.Authentication;
 import org.apache.pulsar.client.api.AuthenticationFactory;
@@ -48,6 +49,7 @@ public class PulsarClientAthenzAuthenticationService extends AbstractPulsarClien
             .description("The domain name for this tenant")
             .defaultValue(null)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .expressionLanguageSupported(ExpressionLanguageScope.VARIABLE_REGISTRY)
             .required(true)
             .sensitive(false)
             .build();
@@ -57,6 +59,7 @@ public class PulsarClientAthenzAuthenticationService extends AbstractPulsarClien
             .description("The service name for this tenant")
             .defaultValue(null)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .expressionLanguageSupported(ExpressionLanguageScope.VARIABLE_REGISTRY)
             .required(true)
             .sensitive(false)
             .build();
@@ -66,6 +69,7 @@ public class PulsarClientAthenzAuthenticationService extends AbstractPulsarClien
             .description("The provider domain name")
             .defaultValue(null)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .expressionLanguageSupported(ExpressionLanguageScope.VARIABLE_REGISTRY)
             .required(true)
             .sensitive(false)
             .build();
@@ -156,9 +160,9 @@ public class PulsarClientAthenzAuthenticationService extends AbstractPulsarClien
     public Authentication getAuthentication() {
         Map<String, String> authParams = new HashMap<>();
 
-        putAuthParamIfSet(authParams, "tenantDomain", configContext.getProperty(TENANT_DOMAIN));
-        putAuthParamIfSet(authParams, "tenantService", configContext.getProperty(TENANT_SERVICE));
-        putAuthParamIfSet(authParams, "providerDomain", configContext.getProperty(PROVIDER_DOMAIN));
+        putAuthParamIfSet(authParams, "tenantDomain", configContext.getProperty(TENANT_DOMAIN).evaluateAttributeExpressions());
+        putAuthParamIfSet(authParams, "tenantService", configContext.getProperty(TENANT_SERVICE).evaluateAttributeExpressions());
+        putAuthParamIfSet(authParams, "providerDomain", configContext.getProperty(PROVIDER_DOMAIN).evaluateAttributeExpressions());
         putAuthParamIfSet(authParams, "privateKey", configContext.getProperty(TENANT_PRIVATE_KEY_FILE));
         putAuthParamIfSet(authParams, "keyId", configContext.getProperty(TENANT_PRIVATE_KEY_ID));
         putAuthParamIfSet(authParams, "autoPrefetchEnabled", configContext.getProperty(AUTO_PREFETCH_ENABLED));
