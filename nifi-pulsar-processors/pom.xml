@@ -53,11 +53,13 @@
             <version>1.9.0</version>
             <scope>provided</scope>
 	    </dependency>
+	    <!-- 
         <dependency>
             <groupId>org.apache.pulsar</groupId>
             <artifactId>pulsar-client</artifactId>
             <version>${pulsar.version}</version>
 		</dependency>
+		 -->
         <dependency>
             <groupId>org.apache.nifi</groupId>
             <artifactId>nifi-mock</artifactId>
