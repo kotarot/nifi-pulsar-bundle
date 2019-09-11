@@ -23,6 +23,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.nifi.processors.pulsar.pubsub.ConsumePulsarRecord;
 import org.apache.nifi.processors.pulsar.pubsub.TestConsumePulsarRecord;
@@ -44,7 +45,7 @@ public class TestAsyncConsumePulsarRecord extends TestConsumePulsarRecord {
         runner.run();
         runner.assertAllFlowFilesTransferred(ConsumePulsarRecord.REL_PARSE_FAILURE);
 
-        verify(mockClientService.getMockConsumer(), times(1)).acknowledgeCumulative(mockMessage);
+        verify(mockClientService.getMockConsumer(), times(0)).acknowledgeAsync(mockMessage);
     }
 
     @Test
@@ -59,7 +60,7 @@ public class TestAsyncConsumePulsarRecord extends TestConsumePulsarRecord {
        runner.run();
        runner.assertAllFlowFilesTransferred(ConsumePulsarRecord.REL_PARSE_FAILURE);
 
-       verify(mockClientService.getMockConsumer(), times(1)).acknowledgeCumulative(mockMessage);
+       verify(mockClientService.getMockConsumer(), times(0)).acknowledgeAsync(mockMessage);
     }
 
     /*
@@ -83,7 +84,7 @@ public class TestAsyncConsumePulsarRecord extends TestConsumePulsarRecord {
            expected.append("\"Justin Thyme\",\"" + idx + "\"").append("\n");
         }
 
-        List<MockFlowFile> results = this.sendMessages(input.toString(), false, 1);
+        List<MockFlowFile> results = this.sendMessages(input.toString(), true, 1);
 
         String flowFileContents = new String(runner.getContentAsByteArray(results.get(0)));
         assertEquals(expected.toString(), flowFileContents);
@@ -110,7 +111,7 @@ public class TestAsyncConsumePulsarRecord extends TestConsumePulsarRecord {
        when(mockMessage.getValue()).thenReturn(input.toString().getBytes());
        mockClientService.setMockMessage(mockMessage);
 
-       runner.setProperty(ConsumePulsarRecord.ASYNC_ENABLED, Boolean.toString(false));
+       runner.setProperty(ConsumePulsarRecord.ASYNC_ENABLED, Boolean.toString(true));
        runner.setProperty(ConsumePulsarRecord.TOPICS, DEFAULT_TOPIC);
        runner.setProperty(ConsumePulsarRecord.SUBSCRIPTION_NAME, DEFAULT_SUB);
        runner.setProperty(ConsumePulsarRecord.CONSUMER_BATCH_SIZE, 1 + "");
@@ -136,10 +137,36 @@ public class TestAsyncConsumePulsarRecord extends TestConsumePulsarRecord {
           expected.append("\"Justin Thyme\",\"" + idx + "\"").append("\n");
        }
 
-       List<MockFlowFile> results = this.sendMessages(input.toString(), false, 50, 100);
+       List<MockFlowFile> results = this.sendMessages(input.toString(), true, 50, 100);
        assertEquals(50, results.size());
 
        String flowFileContents = new String(runner.getContentAsByteArray(results.get(0)));
        assertTrue(flowFileContents.startsWith(expected.toString(), 0));
+    }
+
+    /*
+     * Send a single message containing a single record by non-Shared subscription type (Exclusive in this test case),
+     * to check that the consumer performs `acknowledgeCumulative`
+     */
+    @Test
+    public void singleMessageByExclusiveTest() throws PulsarClientException {
+        when(mockMessage.getValue()).thenReturn(MOCKED_MSG.getBytes());
+        mockClientService.setMockMessage(mockMessage);
+
+        runner.setProperty(ConsumePulsarRecord.ASYNC_ENABLED, Boolean.toString(true));
+        runner.setProperty(ConsumePulsarRecord.TOPICS, DEFAULT_TOPIC);
+        runner.setProperty(ConsumePulsarRecord.SUBSCRIPTION_NAME, DEFAULT_SUB);
+        runner.setProperty(ConsumePulsarRecord.SUBSCRIPTION_TYPE, "Exclusive");
+        runner.setProperty(ConsumePulsarRecord.CONSUMER_BATCH_SIZE, 1 + "");
+        runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "5 sec");
+
+        runner.run(1, true);
+        runner.assertAllFlowFilesTransferred(ConsumePulsarRecord.REL_SUCCESS);
+
+        List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship(ConsumePulsarRecord.REL_SUCCESS);
+        assertEquals(1, flowFiles.size());
+
+        verify(mockClientService.getMockConsumer(), times(2)).receive(0, TimeUnit.SECONDS);
+        verify(mockClientService.getMockConsumer(), times(1)).acknowledgeCumulativeAsync(mockMessage);
     }
 }

@@ -29,6 +29,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public class TestSyncConsumePulsarRecord extends TestConsumePulsarRecord {
 
@@ -43,7 +44,7 @@ public class TestSyncConsumePulsarRecord extends TestConsumePulsarRecord {
         runner.run();
         runner.assertAllFlowFilesTransferred(ConsumePulsarRecord.REL_PARSE_FAILURE);
 
-        verify(mockClientService.getMockConsumer(), times(1)).acknowledgeCumulative(mockMessage);
+        verify(mockClientService.getMockConsumer(), times(0)).acknowledge(mockMessage);
     }
 
     @Test
@@ -57,7 +58,7 @@ public class TestSyncConsumePulsarRecord extends TestConsumePulsarRecord {
        runner.run();
        runner.assertAllFlowFilesTransferred(ConsumePulsarRecord.REL_PARSE_FAILURE);
 
-       verify(mockClientService.getMockConsumer(), times(1)).acknowledgeCumulative(mockMessage);
+       verify(mockClientService.getMockConsumer(), times(0)).acknowledge(mockMessage);
     }
 
     /*
@@ -140,5 +141,31 @@ public class TestSyncConsumePulsarRecord extends TestConsumePulsarRecord {
 
         String flowFileContents = new String(runner.getContentAsByteArray(results.get(0)));
         assertEquals(expected.toString(), flowFileContents);
+    }
+
+    /*
+     * Send a single message containing a single record by non-Shared subscription type (Exclusive in this test case),
+     * to check that the consumer performs `acknowledgeCumulative`
+     */
+    @Test
+    public void singleMessageByExclusiveTest() throws PulsarClientException {
+        when(mockMessage.getValue()).thenReturn(MOCKED_MSG.getBytes());
+        mockClientService.setMockMessage(mockMessage);
+
+        runner.setProperty(ConsumePulsarRecord.ASYNC_ENABLED, Boolean.toString(false));
+        runner.setProperty(ConsumePulsarRecord.TOPICS, DEFAULT_TOPIC);
+        runner.setProperty(ConsumePulsarRecord.SUBSCRIPTION_NAME, DEFAULT_SUB);
+        runner.setProperty(ConsumePulsarRecord.SUBSCRIPTION_TYPE, "Exclusive");
+        runner.setProperty(ConsumePulsarRecord.CONSUMER_BATCH_SIZE, 1 + "");
+        runner.setProperty(ConsumePulsarRecord.MAX_WAIT_TIME, "0 sec");
+
+        runner.run(1, true);
+        runner.assertAllFlowFilesTransferred(ConsumePulsarRecord.REL_SUCCESS);
+
+        List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship(ConsumePulsarRecord.REL_SUCCESS);
+        assertEquals(1, flowFiles.size());
+
+        verify(mockClientService.getMockConsumer(), times(2)).receive(0, TimeUnit.SECONDS);
+        verify(mockClientService.getMockConsumer(), times(1)).acknowledgeCumulative(mockMessage);
     }
 }

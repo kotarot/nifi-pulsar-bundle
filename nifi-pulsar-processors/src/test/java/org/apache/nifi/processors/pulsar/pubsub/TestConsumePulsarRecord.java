@@ -120,8 +120,12 @@ public class TestConsumePulsarRecord extends AbstractPulsarProcessorTest<byte[]>
         List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship(ConsumePulsarRecord.REL_SUCCESS);
         assertEquals(iterations, flowFiles.size());
 
-        verify(mockClientService.getMockConsumer(), times(iterations * (batchSize+1))).receive(0, TimeUnit.SECONDS);
-        verify(mockClientService.getMockConsumer(), times(iterations)).acknowledgeCumulative(mockMessage);
+        verify(mockClientService.getMockConsumer(), times(iterations * (batchSize + 1))).receive(0, TimeUnit.SECONDS);
+        if (async) {
+            verify(mockClientService.getMockConsumer(), times(iterations * batchSize)).acknowledgeAsync(mockMessage);
+        } else {
+            verify(mockClientService.getMockConsumer(), times(iterations * batchSize)).acknowledge(mockMessage);
+        }
 
         return flowFiles;
     }

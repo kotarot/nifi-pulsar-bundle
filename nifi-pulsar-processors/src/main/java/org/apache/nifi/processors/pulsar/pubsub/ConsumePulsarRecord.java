@@ -28,6 +28,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -101,8 +102,8 @@ public class ConsumePulsarRecord extends AbstractPulsarConsumerProcessor<byte[]>
 
     public static final PropertyDescriptor MAX_WAIT_TIME = new PropertyDescriptor.Builder()
             .name("Max Wait Time")
-            .description("The maximum amount of time allowed for a Pulsar consumer to poll a subscription for data "
-                    + ", zero means there is no limit. Max time less than 1 second will be equal to zero.")
+            .description("The maximum amount of time allowed for a Pulsar consumer to poll a subscription for data, "
+                    + "zero means there is no limit. Max time less than 1 second will be equal to zero.")
             .defaultValue("2 seconds")
             .required(true)
             .addValidator(StandardValidators.TIME_PERIOD_VALIDATOR)
@@ -153,7 +154,7 @@ public class ConsumePulsarRecord extends AbstractPulsarConsumerProcessor<byte[]>
                 .evaluateAttributeExpressions().asInteger() : Integer.MAX_VALUE;
 
         final byte[] demarcator = context.getProperty(MESSAGE_DEMARCATOR).isSet() ? context.getProperty(MESSAGE_DEMARCATOR)
-            .evaluateAttributeExpressions().getValue().getBytes() : RECORD_SEPARATOR.getBytes();
+                .evaluateAttributeExpressions().getValue().getBytes() : RECORD_SEPARATOR.getBytes();
 
         try {
             Consumer<byte[]> consumer = getConsumer(context, getConsumerId(context, session.get()));
@@ -164,10 +165,10 @@ public class ConsumePulsarRecord extends AbstractPulsarConsumerProcessor<byte[]>
             }
 
             if (context.getProperty(ASYNC_ENABLED).isSet() && context.getProperty(ASYNC_ENABLED).asBoolean()) {
-               consumeAsync(consumer, context, session);
-               handleAsync(context, session, consumer, readerFactory, writerFactory, demarcator);
+                consumeAsync(consumer, context, session);
+                handleAsync(context, session, consumer, readerFactory, writerFactory, demarcator);
             } else {
-               consumeMessages(session, consumer, getMessages(consumer, maxMessages), readerFactory, writerFactory, demarcator);
+                consumeMessages(session, consumer, context, getMessages(consumer, maxMessages), readerFactory, writerFactory, demarcator);
             }
         } catch (PulsarClientException e) {
             getLogger().error("Unable to consume from Pulsar Topic ", e);
@@ -203,12 +204,14 @@ public class ConsumePulsarRecord extends AbstractPulsarConsumerProcessor<byte[]>
      *
      * @param session - The current ProcessSession.
      * @param consumer - The Pulsar consumer.
+     * @param context - NiFi processor context.
      * @param messages - A list of messages.
      * @param readerFactory - The factory used to read the messages.
      * @param writerFactory - The factory used to write the messages.
+     * @param demarcator - The demarcator of the messages.
      * @throws PulsarClientException if there is an issue communicating with Apache Pulsar.
      */
-    private void consumeMessages(ProcessSession session, final Consumer<byte[]> consumer, final List<Message<byte[]>> messages,
+    private void consumeMessages(ProcessSession session, final Consumer<byte[]> consumer, ProcessContext context, final List<Message<byte[]>> messages,
             final RecordReaderFactory readerFactory, RecordSetWriterFactory writerFactory, final byte[] demarcator) throws PulsarClientException {
 
        if (CollectionUtils.isEmpty(messages)) {
@@ -221,6 +224,12 @@ public class ConsumePulsarRecord extends AbstractPulsarConsumerProcessor<byte[]>
        OutputStream rawOut = session.write(flowFile);
        final RecordSetWriter writer = getRecordWriter(writerFactory, schema, rawOut);
 
+       // Cumulative acks are NOT permitted on Shared subscriptions.
+       final boolean shared = context.getProperty(SUBSCRIPTION_TYPE).getValue().equalsIgnoreCase(SHARED.getValue());
+       final boolean asyncEnabled = context.getProperty(ASYNC_ENABLED).asBoolean();
+
+       boolean flowFileSucceeded = false;
+
        // We were unable to determine the schema, therefore we cannot parse the messages
        if (schema == null || writer == null) {
           parseFailures.addAll(messages);
@@ -228,11 +237,11 @@ public class ConsumePulsarRecord extends AbstractPulsarConsumerProcessor<byte[]>
           // We aren't going to write any records to the FlowFile, so remove it and close the associated output stream
           session.remove(flowFile);
           IOUtils.closeQuietly(rawOut);
-          getLogger().error("Unable create a record writer to consume from the Pulsar topic");
+          getLogger().error("Unable to create a record writer to consume from the Pulsar topic");
        } else {
            try {
                writer.beginRecordSet();
-               messages.forEach(msg ->{
+               messages.forEach(msg -> {
                    final InputStream in = new ByteArrayInputStream(msg.getValue());
                    try {
                        RecordReader r = readerFactory.createRecordReader(Collections.emptyMap(), in, getLogger());
@@ -253,25 +262,59 @@ public class ConsumePulsarRecord extends AbstractPulsarConsumerProcessor<byte[]>
                    session.putAttribute(flowFile, MSG_COUNT, result.getRecordCount() + "");
                    session.getProvenanceReporter().receive(flowFile, getPulsarClientService().getPulsarBrokerRootURL() + "/" + consumer.getTopic());
                    session.transfer(flowFile, REL_SUCCESS);
+                   flowFileSucceeded = true;
                } else {
                    // We were able to parse the records, but unable to write them to the FlowFile
+                   getLogger().error("Unable to create a flow file");
                    session.rollback();
                }
 
-           } catch (IOException e) {
+           } catch (PulsarClientException e) {
               getLogger().error("Unable to consume from Pulsar topic ", e);
+           } catch (IOException e) {
+              getLogger().error("Unable to write to the record ", e);
            }
        }
 
-       handleFailures(session, parseFailures, demarcator);
-       consumer.acknowledgeCumulative(messages.get(messages.size()-1));
+        // Acknowledge the messages only if all processes succeeded
+        if (CollectionUtils.isEmpty(parseFailures) && flowFileSucceeded) {
+            try {
+                if (shared) {
+                    for (Message<byte[]> msg : messages) {
+                        if (asyncEnabled) {
+                            getAckService().submit(new Callable<Object>() {
+                                @Override
+                                public Object call() throws Exception {
+                                    return consumer.acknowledgeAsync(msg).get();
+                                }
+                            });
+                        } else {
+                            consumer.acknowledge(msg);
+                        }
+                    }
+                } else {
+                    if (asyncEnabled) {
+                        getAckService().submit(new Callable<Object>() {
+                            @Override
+                            public Object call() throws Exception {
+                                return consumer.acknowledgeCumulativeAsync(messages.get(messages.size() - 1)).get();
+                            }
+                        });
+                    } else {
+                        consumer.acknowledgeCumulative(messages.get(messages.size() - 1));
+                    }
+                }
+            } catch (PulsarClientException e) {
+                getLogger().error("Error communicating with Apache Pulsar", e);
+                context.yield();
+                session.rollback();
+            }
+        } else {
+            handleFailures(session, parseFailures, demarcator);
+        }
     }
 
     private void handleFailures(ProcessSession session, BlockingQueue<Message<byte[]>> parseFailures, byte[] demarcator) {
-
-        if (CollectionUtils.isEmpty(parseFailures)) {
-           return;
-        }
 
         FlowFile flowFile = session.create();
         OutputStream rawOut = session.write(flowFile);
@@ -298,22 +341,19 @@ public class ConsumePulsarRecord extends AbstractPulsarConsumerProcessor<byte[]>
      * @param demarcator - The bytes used to demarcate the individual messages.
      */
     protected void handleAsync(ProcessContext context, ProcessSession session, final Consumer<byte[]> consumer,
-         final RecordReaderFactory readerFactory, RecordSetWriterFactory writerFactory, byte[] demarcator) throws PulsarClientException {
+            final RecordReaderFactory readerFactory, RecordSetWriterFactory writerFactory, byte[] demarcator) throws PulsarClientException {
 
         final Integer queryTimeout = context.getProperty(MAX_WAIT_TIME).evaluateAttributeExpressions().asTimePeriod(TimeUnit.SECONDS).intValue();
 
         try {
-             Future<List<Message<byte[]>>> done = null;
-             do {
-                 done = getConsumerService().poll(queryTimeout, TimeUnit.SECONDS);
+            Future<List<Message<byte[]>>> done = getConsumerService().poll(queryTimeout, TimeUnit.SECONDS);
 
-                 if (done != null) {
-                    List<Message<byte[]>> messages = done.get();
-                    if (CollectionUtils.isNotEmpty(messages)) {
-                      consumeMessages(session, consumer, messages, readerFactory, writerFactory, demarcator);
-                    }
-                 }
-             } while (done != null);
+            if (done != null) {
+                List<Message<byte[]>> messages = done.get();
+                if (CollectionUtils.isNotEmpty(messages)) {
+                    consumeMessages(session, consumer, context, messages, readerFactory, writerFactory, demarcator);
+                }
+            }
 
         } catch (InterruptedException | ExecutionException e) {
             getLogger().error("Trouble consuming messages ", e);
