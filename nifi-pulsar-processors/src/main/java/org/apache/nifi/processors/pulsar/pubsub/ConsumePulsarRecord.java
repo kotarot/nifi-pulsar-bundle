@@ -226,8 +226,8 @@ public class ConsumePulsarRecord extends AbstractPulsarConsumerProcessor<byte[]>
           parseFailures.addAll(messages);
 
           // We aren't going to write any records to the FlowFile, so remove it and close the associated output stream
-          session.remove(flowFile);
           IOUtils.closeQuietly(rawOut);
+          session.remove(flowFile);
           getLogger().error("Unable create a record writer to consume from the Pulsar topic");
        } else {
            try {
